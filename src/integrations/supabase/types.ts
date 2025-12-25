@@ -14,7 +14,171 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      tn_digipin_profiles: {
+        Row: {
+          area: string | null
+          avg_confidence: number | null
+          characteristic_sounds: string[] | null
+          city: string
+          created_at: string | null
+          digipin_id: string
+          district: string | null
+          embedding_512d: number[] | null
+          id: string
+          latitude: number
+          longitude: number
+          pincode: string | null
+          street: string | null
+          updated_at: string | null
+          urban_type: Database["public"]["Enums"]["urban_type"] | null
+          verification_count: number | null
+        }
+        Insert: {
+          area?: string | null
+          avg_confidence?: number | null
+          characteristic_sounds?: string[] | null
+          city: string
+          created_at?: string | null
+          digipin_id: string
+          district?: string | null
+          embedding_512d?: number[] | null
+          id?: string
+          latitude: number
+          longitude: number
+          pincode?: string | null
+          street?: string | null
+          updated_at?: string | null
+          urban_type?: Database["public"]["Enums"]["urban_type"] | null
+          verification_count?: number | null
+        }
+        Update: {
+          area?: string | null
+          avg_confidence?: number | null
+          characteristic_sounds?: string[] | null
+          city?: string
+          created_at?: string | null
+          digipin_id?: string
+          district?: string | null
+          embedding_512d?: number[] | null
+          id?: string
+          latitude?: number
+          longitude?: number
+          pincode?: string | null
+          street?: string | null
+          updated_at?: string | null
+          urban_type?: Database["public"]["Enums"]["urban_type"] | null
+          verification_count?: number | null
+        }
+        Relationships: []
+      }
+      user_home_profiles: {
+        Row: {
+          canonical_address: string | null
+          city: string
+          enrolled_at: string | null
+          gps_lat: number | null
+          gps_lon: number | null
+          home_digipin_id: string | null
+          home_embeddings: number[] | null
+          id: string
+          pincode: string | null
+          raw_address: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          canonical_address?: string | null
+          city: string
+          enrolled_at?: string | null
+          gps_lat?: number | null
+          gps_lon?: number | null
+          home_digipin_id?: string | null
+          home_embeddings?: number[] | null
+          id?: string
+          pincode?: string | null
+          raw_address: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          canonical_address?: string | null
+          city?: string
+          enrolled_at?: string | null
+          gps_lat?: number | null
+          gps_lon?: number | null
+          home_digipin_id?: string | null
+          home_embeddings?: number[] | null
+          id?: string
+          pincode?: string | null
+          raw_address?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      validation_logs: {
+        Row: {
+          audio_hash: string | null
+          candidates: Json | null
+          confidence: number | null
+          created_at: string | null
+          device_id: string | null
+          digipin_id: string | null
+          id: string
+          ip_hash: string | null
+          is_home_mode: boolean | null
+          match_type: Database["public"]["Enums"]["match_type"] | null
+          processing_time_ms: number | null
+          raw_address: string
+          scene_type: Database["public"]["Enums"]["scene_type"] | null
+          selected_candidate_index: number | null
+          session_id: string | null
+          user_id: string | null
+          validation_token: string | null
+          verified_address: string | null
+        }
+        Insert: {
+          audio_hash?: string | null
+          candidates?: Json | null
+          confidence?: number | null
+          created_at?: string | null
+          device_id?: string | null
+          digipin_id?: string | null
+          id?: string
+          ip_hash?: string | null
+          is_home_mode?: boolean | null
+          match_type?: Database["public"]["Enums"]["match_type"] | null
+          processing_time_ms?: number | null
+          raw_address: string
+          scene_type?: Database["public"]["Enums"]["scene_type"] | null
+          selected_candidate_index?: number | null
+          session_id?: string | null
+          user_id?: string | null
+          validation_token?: string | null
+          verified_address?: string | null
+        }
+        Update: {
+          audio_hash?: string | null
+          candidates?: Json | null
+          confidence?: number | null
+          created_at?: string | null
+          device_id?: string | null
+          digipin_id?: string | null
+          id?: string
+          ip_hash?: string | null
+          is_home_mode?: boolean | null
+          match_type?: Database["public"]["Enums"]["match_type"] | null
+          processing_time_ms?: number | null
+          raw_address?: string
+          scene_type?: Database["public"]["Enums"]["scene_type"] | null
+          selected_candidate_index?: number | null
+          session_id?: string | null
+          user_id?: string | null
+          validation_token?: string | null
+          verified_address?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +187,26 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      match_type: "exact" | "strong" | "weak" | "home_verified" | "candidates"
+      scene_type:
+        | "market"
+        | "temple"
+        | "residential"
+        | "transport"
+        | "hospital"
+        | "school"
+        | "commercial"
+        | "quiet"
+        | "unknown"
+      urban_type:
+        | "market"
+        | "temple"
+        | "residential"
+        | "transport"
+        | "hospital"
+        | "school"
+        | "commercial"
+        | "quiet"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +333,29 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      match_type: ["exact", "strong", "weak", "home_verified", "candidates"],
+      scene_type: [
+        "market",
+        "temple",
+        "residential",
+        "transport",
+        "hospital",
+        "school",
+        "commercial",
+        "quiet",
+        "unknown",
+      ],
+      urban_type: [
+        "market",
+        "temple",
+        "residential",
+        "transport",
+        "hospital",
+        "school",
+        "commercial",
+        "quiet",
+      ],
+    },
   },
 } as const
