@@ -1,12 +1,13 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, Square, RotateCcw, ArrowRight, Volume2, VolumeX } from "lucide-react";
+import { Mic, Square, RotateCcw, ArrowRight, Volume2, VolumeX, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddressFormData } from "@/lib/constants";
+import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 
 interface SoundRecordingScreenProps {
   addressData: AddressFormData;
-  onVerify: () => void;
+  onVerify: (audioBase64: string | null) => void;
   onBack: () => void;
 }
 
@@ -15,14 +16,17 @@ export function SoundRecordingScreen({
   onVerify, 
   onBack 
 }: SoundRecordingScreenProps) {
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [hasRecording, setHasRecording] = useState(false);
-  const [soundLevel, setSoundLevel] = useState<"ok" | "quiet" | null>(null);
-  const [audioLevels, setAudioLevels] = useState<number[]>(Array(20).fill(0.1));
-  
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const animationRef = useRef<number | null>(null);
+  const {
+    isRecording,
+    recordingTime,
+    hasRecording,
+    audioBase64,
+    audioLevels,
+    error,
+    startRecording,
+    stopRecording,
+    resetRecording,
+  } = useAudioRecorder();
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -30,57 +34,26 @@ export function SoundRecordingScreen({
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const simulateAudioLevels = useCallback(() => {
-    if (!isRecording) return;
-    
-    setAudioLevels(prev => 
-      prev.map(() => 0.1 + Math.random() * 0.9)
-    );
-    
-    animationRef.current = requestAnimationFrame(simulateAudioLevels);
-  }, [isRecording]);
+  // Determine sound level based on audio levels
+  const averageLevel = audioLevels.reduce((a, b) => a + b, 0) / audioLevels.length;
+  const soundLevel = hasRecording 
+    ? (averageLevel > 0.2 ? "ok" : "quiet")
+    : null;
 
-  useEffect(() => {
+  const handleRecordToggle = async () => {
     if (isRecording) {
-      timerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
-      
-      animationRef.current = requestAnimationFrame(simulateAudioLevels);
+      stopRecording();
     } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-      setAudioLevels(Array(20).fill(0.1));
-    }
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-    };
-  }, [isRecording, simulateAudioLevels]);
-
-  const handleRecordToggle = () => {
-    if (isRecording) {
-      setIsRecording(false);
-      setHasRecording(true);
-      // Simulate sound level detection
-      setSoundLevel(Math.random() > 0.3 ? "ok" : "quiet");
-    } else {
-      setIsRecording(true);
-      setRecordingTime(0);
-      setSoundLevel(null);
+      await startRecording();
     }
   };
 
   const handleReRecord = () => {
-    setHasRecording(false);
-    setRecordingTime(0);
-    setSoundLevel(null);
-    setIsRecording(false);
+    resetRecording();
+  };
+
+  const handleVerify = () => {
+    onVerify(audioBase64);
   };
 
   const canVerify = hasRecording && recordingTime >= 10;
@@ -103,6 +76,21 @@ export function SoundRecordingScreen({
       </div>
 
       <div className="elevated-card rounded-2xl p-6 space-y-6">
+        {/* Error Message */}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="flex items-center gap-2 p-3 rounded-xl bg-destructive/10 text-destructive"
+            >
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span className="text-sm">{error}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Waveform Visualization */}
         <div className="flex items-center justify-center gap-1 h-24 bg-muted/50 rounded-xl px-4">
           {audioLevels.map((level, index) => (
@@ -132,6 +120,11 @@ export function SoundRecordingScreen({
           {recordingTime > 0 && recordingTime < 10 && !isRecording && (
             <p className="text-xs text-warning mt-1">
               Minimum 10 seconds required
+            </p>
+          )}
+          {isRecording && recordingTime >= 20 && (
+            <p className="text-xs text-success mt-1">
+              Good recording length! You can stop now.
             </p>
           )}
         </div>
@@ -164,7 +157,7 @@ export function SoundRecordingScreen({
 
         {/* Sound Level Status */}
         <AnimatePresence>
-          {soundLevel && (
+          {soundLevel && !isRecording && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -208,7 +201,7 @@ export function SoundRecordingScreen({
         <Button 
           size="lg" 
           className="flex-1 gap-2"
-          onClick={onVerify}
+          onClick={handleVerify}
           disabled={!canVerify || isRecording}
         >
           Verify Address

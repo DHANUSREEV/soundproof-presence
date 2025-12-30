@@ -4,19 +4,25 @@ import { StepIndicator } from "@/components/StepIndicator";
 import { AddressEntryScreen } from "@/components/AddressEntryScreen";
 import { SoundRecordingScreen } from "@/components/SoundRecordingScreen";
 import { VerificationResultScreen } from "@/components/VerificationResultScreen";
+import { AnalyzingScreen } from "@/components/AnalyzingScreen";
 import { AddressFormData, VerificationResult } from "@/lib/constants";
+import { useVerification } from "@/hooks/useVerification";
+import { toast } from "sonner";
 
-type Screen = "address" | "recording" | "result";
+type Screen = "address" | "recording" | "analyzing" | "result";
 
 const Index = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>("address");
   const [addressData, setAddressData] = useState<AddressFormData | null>(null);
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
+  
+  const { isVerifying, verifyAddress } = useVerification();
 
   const getStepNumber = () => {
     switch (currentScreen) {
       case "address": return 1;
       case "recording": return 2;
+      case "analyzing": return 3;
       case "result": return 3;
       default: return 1;
     }
@@ -27,15 +33,20 @@ const Index = () => {
     setCurrentScreen("recording");
   };
 
-  const handleVerify = () => {
-    // Simulate verification with 70% success rate
-    const isVerified = Math.random() > 0.3;
-    setVerificationResult({
-      verified: isVerified,
-      digipin: isVerified ? `TN-${addressData?.city?.toUpperCase().slice(0, 3) || "CHN"}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}` : undefined,
-      reason: isVerified ? undefined : "Sound did not match expected location profile",
-    });
-    setCurrentScreen("result");
+  const handleVerify = async (audioBase64: string | null) => {
+    if (!addressData) return;
+    
+    setCurrentScreen("analyzing");
+    
+    const result = await verifyAddress(addressData, audioBase64);
+    
+    if (result) {
+      setVerificationResult(result);
+      setCurrentScreen("result");
+    } else {
+      toast.error("Verification failed. Please try again.");
+      setCurrentScreen("recording");
+    }
   };
 
   const handleRetry = () => {
@@ -69,6 +80,13 @@ const Index = () => {
                 addressData={addressData}
                 onVerify={handleVerify}
                 onBack={() => setCurrentScreen("address")}
+              />
+            )}
+            
+            {currentScreen === "analyzing" && addressData && (
+              <AnalyzingScreen
+                key="analyzing"
+                addressData={addressData}
               />
             )}
             
