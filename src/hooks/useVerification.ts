@@ -2,26 +2,24 @@ import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { AddressFormData, VerificationResult } from "@/lib/constants";
 
-interface VerificationCandidate {
-  address: string;
-  confidence: number;
-}
-
 interface VerifyAddressResponse {
-  status: "verified" | "candidates";
+  status: "verified" | "candidates" | "retry";
   verified: boolean;
-  digipin: string;
+  digipin: string | null;
   verifiedAddress?: string;
-  candidates?: VerificationCandidate[];
+  formattedAddress?: string;
+  candidates?: { address: string; confidence: number }[];
   primaryAddress?: string;
   city: string;
   confidence: number;
   matchType: string;
   sceneType: string;
-  characteristicSounds: string[];
+  characteristicSounds?: string[];
   validationToken: string;
   processingTimeMs: number;
   reason?: string;
+  verificationMethod?: "sound" | "location" | "manual";
+  isActiveTime?: boolean;
 }
 
 interface UseVerificationReturn {
@@ -46,7 +44,10 @@ export function useVerification(): UseVerificationReturn {
       setError(null);
 
       try {
-        console.log("[useVerification] Calling verify-address function...");
+        console.log("[useVerification] Calling verify-address with landmark:", addressData.landmarkCategory);
+        
+        // Get current local hour for time-aware verification
+        const localHour = new Date().getHours();
         
         const { data, error: fnError } = await supabase.functions.invoke<VerifyAddressResponse>(
           "verify-address",
@@ -55,7 +56,10 @@ export function useVerification(): UseVerificationReturn {
               rawAddress: addressData.fullAddress,
               city: addressData.city,
               pincode: addressData.pincode || null,
+              landmarkText: addressData.landmarkText || null,
+              landmarkCategory: addressData.landmarkCategory || "residential",
               audioBase64: audioBase64,
+              localTime: localHour,
               sessionId: `session_${Date.now()}`,
             },
           }
@@ -70,16 +74,21 @@ export function useVerification(): UseVerificationReturn {
           throw new Error("No response from verification service");
         }
 
-        console.log("[useVerification] Response:", data);
+        console.log("[useVerification] Response:", data.status, data.confidence, data.verificationMethod);
 
         // Convert API response to VerificationResult
         const result: VerificationResult = {
           verified: data.verified,
           confidence: data.confidence,
-          digipin: data.digipin,
-          formattedAddress: data.verifiedAddress || data.primaryAddress,
+          digipin: data.digipin || undefined,
+          formattedAddress: data.formattedAddress || data.verifiedAddress || data.primaryAddress,
           city: data.city,
           reason: data.reason,
+          matchType: data.matchType,
+          sceneType: data.sceneType,
+          verificationMethod: data.verificationMethod,
+          characteristicSounds: data.characteristicSounds,
+          candidates: data.candidates,
         };
 
         return result;
