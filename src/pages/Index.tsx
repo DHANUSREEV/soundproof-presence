@@ -5,24 +5,26 @@ import { AddressEntryScreen } from "@/components/AddressEntryScreen";
 import { SoundRecordingScreen } from "@/components/SoundRecordingScreen";
 import { VerificationResultScreen } from "@/components/VerificationResultScreen";
 import { AnalyzingScreen } from "@/components/AnalyzingScreen";
+import { CandidateSelectionScreen } from "@/components/CandidateSelectionScreen";
 import { AddressFormData, VerificationResult } from "@/lib/constants";
 import { useVerification } from "@/hooks/useVerification";
 import { toast } from "sonner";
 
-type Screen = "address" | "recording" | "analyzing" | "result";
+type Screen = "address" | "recording" | "analyzing" | "candidates" | "result";
 
 const Index = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>("address");
   const [addressData, setAddressData] = useState<AddressFormData | null>(null);
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
   
-  const { isVerifying, verifyAddress } = useVerification();
+  const { verifyAddress } = useVerification();
 
   const getStepNumber = () => {
     switch (currentScreen) {
       case "address": return 1;
       case "recording": return 2;
       case "analyzing": return 3;
+      case "candidates": return 3;
       case "result": return 3;
       default: return 1;
     }
@@ -42,11 +44,37 @@ const Index = () => {
     
     if (result) {
       setVerificationResult(result);
-      setCurrentScreen("result");
+      
+      // Decision logic based on confidence
+      if (result.verified && result.confidence >= 0.85) {
+        // High confidence - directly verified
+        setCurrentScreen("result");
+      } else if (result.candidates && result.candidates.length > 0 && result.confidence >= 0.70) {
+        // Medium confidence - show candidates for OTP-style selection
+        setCurrentScreen("candidates");
+      } else {
+        // Low confidence - show failure
+        setCurrentScreen("result");
+      }
     } else {
       toast.error("Verification failed. Please try again.");
       setCurrentScreen("recording");
     }
+  };
+
+  const handleCandidateSelect = (index: number, address: string) => {
+    if (!verificationResult) return;
+    
+    // Mark as confirmed with selected address
+    setVerificationResult({
+      ...verificationResult,
+      verified: true,
+      formattedAddress: address,
+      verificationMethod: "manual",
+      confidence: verificationResult.candidates?.[index]?.confidence || verificationResult.confidence,
+    });
+    setCurrentScreen("result");
+    toast.success("Address confirmed successfully!");
   };
 
   const handleRetry = () => {
@@ -87,6 +115,16 @@ const Index = () => {
               <AnalyzingScreen
                 key="analyzing"
                 addressData={addressData}
+              />
+            )}
+            
+            {currentScreen === "candidates" && addressData && verificationResult && (
+              <CandidateSelectionScreen
+                key="candidates"
+                addressData={addressData}
+                result={verificationResult}
+                onSelect={handleCandidateSelect}
+                onBack={handleRetry}
               />
             )}
             
