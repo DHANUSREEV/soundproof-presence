@@ -96,62 +96,106 @@ function calculateConfidence(params: {
   isActiveTime: boolean;
   hasAudio: boolean;
   hasGps: boolean;
-}): { confidence: number; verificationMethod: "sound" | "location" | "manual" } {
-  const { landmarkCategory, expectedScene, detectedScene, isActiveTime, hasAudio, hasGps } = params;
-  
-  let confidence = 0.5; // Base confidence
-  let method: "sound" | "location" | "manual" = "manual";
-  
-  // Factor weights as per spec
-  const weights = {
-    embedding: 0.35,
-    sceneMatch: 0.20,
-    landmark: 0.15,
-    geo: 0.15,
-    address: 0.15,
+  gpsDistance: number | null; // meters
+  snrLevel: "high" | "low";
+}): { 
+  confidence: number; 
+  verificationMethod: "sound" | "location" | "manual";
+  verificationPath: "A" | "B"; // A = sound, B = GPS fallback
+} {
+  const { 
+    landmarkCategory, 
+    expectedScene, 
+    detectedScene, 
+    isActiveTime, 
+    hasAudio, 
+    hasGps,
+    gpsDistance,
+    snrLevel
+  } = params;
+
+  // Decision weights as per spec
+  const WEIGHTS = {
+    sound: 0.8,
+    gps: 0.2,
+    time: 0.1,
   };
-  
-  // Step A: Check time + landmark category
-  if (!isActiveTime) {
-    // Off-hours: skip sound, rely on GPS/address
-    if (hasGps) {
-      confidence = 0.70 + Math.random() * 0.15; // 70-85%
-      method = "location";
-    } else {
-      confidence = 0.55 + Math.random() * 0.15; // 55-70%
-      method = "manual";
-    }
-    return { confidence, verificationMethod: method };
-  }
-  
-  // Step B: Active time - use sound
-  if (hasAudio) {
-    // Scene match bonus
-    const sceneMatches = expectedScene === detectedScene;
+
+  let confidence = 0.5;
+  let method: "sound" | "location" | "manual" = "manual";
+  let path: "A" | "B" = "B";
+
+  const sceneMatches = expectedScene === detectedScene;
+  const gpsCloseEnough = gpsDistance !== null && gpsDistance < 100; // <100m
+
+  // PATH A: Sound Verification (SNR high + time correct + scene match)
+  if (hasAudio && snrLevel === "high" && isActiveTime) {
+    path = "A";
     
     if (sceneMatches) {
-      // High confidence when scene matches landmark
-      confidence = 0.85 + Math.random() * 0.13; // 85-98%
+      // Strong sound match
+      confidence = 0.85 + (Math.random() * 0.12); // 85-97%
       method = "sound";
+      
+      // Boost for high-signal landmarks
+      if (["temple", "transport", "market", "school"].includes(landmarkCategory)) {
+        confidence = Math.min(0.98, confidence + 0.03);
+      }
+      
+      // Add GPS bonus if available
+      if (gpsCloseEnough) {
+        confidence = Math.min(0.99, confidence + WEIGHTS.gps * 0.1);
+      }
     } else {
-      // Partial match
-      confidence = 0.70 + Math.random() * 0.15; // 70-85%
+      // Scene mismatch - still use sound but lower confidence
+      confidence = 0.70 + (Math.random() * 0.15); // 70-85%
       method = "sound";
+    }
+  }
+  // PATH B: GPS Fallback (silent/off-hours/low SNR, <100m distance)
+  else if (gpsCloseEnough) {
+    path = "B";
+    method = "location";
+    
+    // GPS base confidence
+    let gpsConf = 0.75 + (Math.random() * 0.10); // 75-85%
+    
+    // Adjust based on conditions
+    if (hasAudio && snrLevel === "low") {
+      // Silent area - GPS + ambient audio
+      gpsConf = Math.min(0.90, gpsConf + 0.05);
     }
     
-    // Adjust for specific high-signal landmarks
-    if (["temple", "transport", "market"].includes(landmarkCategory) && sceneMatches) {
-      confidence = Math.min(0.98, confidence + 0.05);
+    if (!isActiveTime) {
+      // Off-hours - GPS is expected
+      gpsConf = Math.min(0.88, gpsConf + 0.03);
     }
-  } else if (hasGps) {
-    confidence = 0.65 + Math.random() * 0.20; // 65-85%
-    method = "location";
-  } else {
-    confidence = 0.50 + Math.random() * 0.20; // 50-70%
-    method = "manual";
+    
+    confidence = gpsConf;
   }
-  
-  return { confidence: Math.min(0.98, confidence), verificationMethod: method };
+  // PATH B without GPS: fallback to candidates
+  else if (hasAudio) {
+    path = "B";
+    method = "sound";
+    
+    if (isActiveTime && sceneMatches) {
+      confidence = 0.70 + (Math.random() * 0.10); // 70-80%
+    } else {
+      confidence = 0.55 + (Math.random() * 0.15); // 55-70%
+    }
+  }
+  // No audio, no GPS - manual/retry
+  else {
+    path = "B";
+    method = "manual";
+    confidence = 0.45 + (Math.random() * 0.20); // 45-65%
+  }
+
+  return { 
+    confidence: Math.min(0.98, Math.max(0.3, confidence)), 
+    verificationMethod: method,
+    verificationPath: path
+  };
 }
 
 function mockProcessAudio(
@@ -161,7 +205,9 @@ function mockProcessAudio(
   landmarkText: string,
   currentHour: number,
   hasAudio: boolean,
-  hasGps: boolean
+  hasGps: boolean,
+  gpsLat: number | null,
+  gpsLon: number | null
 ): {
   sceneType: string;
   confidence: number;
@@ -170,7 +216,10 @@ function mockProcessAudio(
   digipin: string;
   verifiedAddress: string;
   verificationMethod: "sound" | "location" | "manual";
+  verificationPath: "A" | "B";
   isActiveTime: boolean;
+  snrLevel: "high" | "low";
+  gpsDistance: number | null;
 } {
   const cityData = TN_CITIES[city.toLowerCase()];
   
@@ -183,30 +232,48 @@ function mockProcessAudio(
       digipin: generateDigipin(13.0, 80.0),
       verifiedAddress: rawAddress,
       verificationMethod: "manual",
+      verificationPath: "B",
       isActiveTime: false,
+      snrLevel: "low",
+      gpsDistance: null,
     };
   }
 
   const isActiveTime = isWithinActiveTime(landmarkCategory, currentHour);
   const expectedScene = LANDMARK_TO_SCENE[landmarkCategory] || "residential";
   
+  // Mock SNR detection (in reality, computed from audio)
+  const snrLevel: "high" | "low" = hasAudio && Math.random() > 0.25 ? "high" : "low";
+  
+  // Mock GPS distance calculation
+  let gpsDistance: number | null = null;
+  if (hasGps && gpsLat && gpsLon) {
+    // Haversine-like mock distance (usually 10-150m)
+    gpsDistance = Math.floor(Math.random() * 120) + 10;
+  }
+  
   // Mock scene detection - biased toward matching when in active time with audio
   let detectedScene: string;
-  if (isActiveTime && hasAudio) {
-    // 80% chance of matching expected scene when audio + active time
-    detectedScene = Math.random() < 0.80 ? expectedScene : cityData.scenes[0];
+  if (isActiveTime && hasAudio && snrLevel === "high") {
+    // 85% chance of matching expected scene when audio + active time + high SNR
+    detectedScene = Math.random() < 0.85 ? expectedScene : cityData.scenes[0];
+  } else if (hasAudio) {
+    // 60% chance with audio but poor conditions
+    detectedScene = Math.random() < 0.60 ? expectedScene : cityData.scenes[0];
   } else {
     detectedScene = cityData.scenes[Math.floor(Math.random() * cityData.scenes.length)];
   }
   
-  // Calculate confidence using weighted factors
-  const { confidence, verificationMethod } = calculateConfidence({
+  // Calculate confidence using decision matrix
+  const { confidence, verificationMethod, verificationPath } = calculateConfidence({
     landmarkCategory,
     expectedScene,
     detectedScene,
     isActiveTime,
     hasAudio,
     hasGps,
+    gpsDistance,
+    snrLevel,
   });
   
   // Determine match type based on thresholds
@@ -236,7 +303,10 @@ function mockProcessAudio(
     digipin,
     verifiedAddress,
     verificationMethod,
+    verificationPath,
     isActiveTime,
+    snrLevel,
+    gpsDistance,
   };
 }
 
@@ -306,7 +376,9 @@ serve(async (req) => {
       landmarkText || "",
       currentHour,
       hasAudio,
-      hasGps
+      hasGps,
+      gpsLat || null,
+      gpsLon || null
     );
     
     const validationToken = `VAL_${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
