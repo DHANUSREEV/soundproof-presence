@@ -81,14 +81,15 @@ export interface AddressFormData {
 
 export interface VerificationResult {
   verified: boolean;
-  confidence?: number;
+  confidence: number;
   digipin?: string;
   formattedAddress?: string;
   city?: string;
   reason?: string;
   matchType?: string;
   sceneType?: string;
-  verificationMethod?: "sound" | "location" | "manual";
+  verificationMethod?: "sound" | "location" | "manual" | "confirmed";
   characteristicSounds?: string[];
   candidates?: { address: string; confidence: number }[];
+  isActiveTime?: boolean;
 }

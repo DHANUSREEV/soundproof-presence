@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import { CheckCircle2, XCircle, RotateCcw, ShieldCheck, MapPin, Hash, ArrowLeft } from "lucide-react";
+import { CheckCircle2, XCircle, RotateCcw, ShieldCheck, MapPin, Hash, ArrowLeft, Wifi, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AddressFormData, VerificationResult, TAMIL_NADU_CITIES } from "@/lib/constants";
+import { AddressFormData, VerificationResult, TAMIL_NADU_CITIES, LANDMARK_CATEGORIES } from "@/lib/constants";
 
 interface VerificationResultScreenProps {
   addressData: AddressFormData;
@@ -17,12 +17,40 @@ export function VerificationResultScreen({
   onFinish,
 }: VerificationResultScreenProps) {
   const cityLabel = TAMIL_NADU_CITIES.find(c => c.value === addressData.city)?.label || addressData.city;
+  const landmarkLabel = LANDMARK_CATEGORIES.find(l => l.value === addressData.landmarkCategory)?.label;
+
+  // Get verification method icon and label
+  const getVerificationBadge = () => {
+    switch (result.verificationMethod) {
+      case "sound":
+        return {
+          icon: <Wifi className="w-3.5 h-3.5" />,
+          label: "Verified by Sound",
+          className: "bg-success-soft text-success"
+        };
+      case "location":
+        return {
+          icon: <Navigation className="w-3.5 h-3.5" />,
+          label: "Verified by GPS",
+          className: "bg-primary/10 text-primary"
+        };
+      default:
+        return {
+          icon: <ShieldCheck className="w-3.5 h-3.5" />,
+          label: "Verified",
+          className: "bg-success-soft text-success"
+        };
+    }
+  };
+
+  const badge = getVerificationBadge();
 
   if (result.verified) {
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
         transition={{ duration: 0.4 }}
         className="flex flex-col gap-6"
       >
@@ -38,10 +66,10 @@ export function VerificationResultScreen({
           
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold text-foreground">
-              Address Verified Successfully
+              Address Verified!
             </h1>
             <p className="text-muted-foreground text-sm">
-              Your presence at this location has been confirmed
+              {Math.round(result.confidence * 100)}% confidence match
             </p>
           </div>
         </div>
@@ -56,7 +84,7 @@ export function VerificationResultScreen({
                 Verified Address
               </p>
               <p className="text-sm text-foreground mt-1">
-                {addressData.fullAddress}
+                {result.formattedAddress || addressData.fullAddress}
               </p>
             </div>
           </div>
@@ -67,11 +95,12 @@ export function VerificationResultScreen({
             </div>
             <div className="flex-1">
               <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                City
+                Location
               </p>
               <p className="text-sm text-foreground mt-1">
                 {cityLabel}
                 {addressData.pincode && ` - ${addressData.pincode}`}
+                {landmarkLabel && ` • Near ${landmarkLabel}`}
               </p>
             </div>
           </div>
@@ -90,25 +119,39 @@ export function VerificationResultScreen({
             </div>
           </div>
 
+          {/* Scene & Sounds info */}
+          {result.sceneType && (
+            <div className="pt-2 border-t border-border/50">
+              <p className="text-xs text-muted-foreground">
+                Detected: <span className="font-medium capitalize">{result.sceneType}</span>
+                {result.characteristicSounds && result.characteristicSounds.length > 0 && (
+                  <span> • {result.characteristicSounds.slice(0, 3).join(", ")}</span>
+                )}
+              </p>
+            </div>
+          )}
+
           <div className="pt-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-success-soft text-success text-xs font-medium">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Verified by Sound
+            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${badge.className}`}>
+              {badge.icon}
+              {badge.label}
             </div>
           </div>
         </div>
 
         <Button size="xl" variant="success" className="w-full" onClick={onFinish}>
-          Finish
+          Done
         </Button>
       </motion.div>
     );
   }
 
+  // Failed verification
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.4 }}
       className="flex flex-col gap-6"
     >
@@ -124,10 +167,10 @@ export function VerificationResultScreen({
         
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold text-foreground">
-            Unable to Verify Address
+            Verification Failed
           </h1>
           <p className="text-muted-foreground text-sm">
-            {result.reason || "Sound did not match location"}
+            {result.reason || "Could not match sound to location"}
           </p>
         </div>
       </div>
@@ -142,9 +185,10 @@ export function VerificationResultScreen({
               Possible reasons:
             </p>
             <ul className="text-sm text-muted-foreground mt-2 space-y-1">
-              <li>• Sound did not match expected location</li>
               <li>• Environment was too quiet</li>
-              <li>• Recording quality was insufficient</li>
+              <li>• Sound did not match expected landmark</li>
+              <li>• Recording quality was low</li>
+              <li>• Outside active hours for this location</li>
             </ul>
           </div>
         </div>
@@ -155,9 +199,9 @@ export function VerificationResultScreen({
           <RotateCcw className="w-5 h-5" />
           Try Recording Again
         </Button>
-        <Button size="lg" variant="outline" className="w-full gap-2">
+        <Button size="lg" variant="outline" className="w-full gap-2" onClick={onFinish}>
           <ArrowLeft className="w-4 h-4" />
-          Use Alternate Verification
+          Start Over
         </Button>
       </div>
     </motion.div>
